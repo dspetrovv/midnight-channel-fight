@@ -1,3 +1,4 @@
+
 export enum Element {
     PHYS = 'Physical',
     FIRE = 'Fire',
@@ -52,7 +53,7 @@ export interface BattleState {
     turnOrder: string[]; // Array of Unit IDs
     currentTurnIndex: number;
     log: string[];
-    phase: 'START' | 'PLAYER_INPUT' | 'PROCESSING' | 'VICTORY' | 'DEFEAT' | 'ALL_OUT_PROMPT' | 'VICTORY_PENDING';
+    phase: 'START' | 'TURN_START' | 'PLAYER_INPUT' | 'PROCESSING' | 'VICTORY' | 'DEFEAT' | 'ALL_OUT_PROMPT' | 'VICTORY_PENDING';
     oneMore: boolean; // Is the current turn a "One More"?
     navigatorMessage: string | null;
     navigating: boolean;

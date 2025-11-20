@@ -46,6 +46,12 @@ export const INITIAL_INVENTORY: Record<string, number> = {
     REVIVAL_BEAD: 2
 };
 
+export const MUSIC_TRACKS = {
+    MENU: '/music/menu.mp3',
+    BATTLE: '/music/battle.mp3',
+    VICTORY: '/music/victory.mp3'
+};
+
 export const HERO_ROSTER: Unit[] = [
     {
         id: 'hero_1',
