@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BattleState, Unit, UnitType, Element, ActionType, Skill } from './types';
 import { INITIAL_UNITS, SKILLS, ELEMENT_COLORS, ITEMS, INITIAL_INVENTORY, NAVIGATOR_LINES, HERO_ROSTER, ENEMY_ROSTER } from './constants';
 import { getTacticalAdvice } from './services/aiService';
-import { Sparkles, Swords, Shield, Zap, Skull, Play, RefreshCw, Eye, Star, Triangle, BriefcaseMedical, Flame, Snowflake, Wind, Heart, Cross, Users, LogOut } from 'lucide-react';
+import { Sparkles, Swords, Shield, Zap, Skull, Play, RefreshCw, Eye, Star, Triangle, BriefcaseMedical, Flame, Snowflake, Wind, Heart, Cross, Users, LogOut, AlertTriangle } from 'lucide-react';
 
 // --- Components ---
 
@@ -209,7 +208,11 @@ const UnitCard: React.FC<UnitProps> = ({ unit, isActive, isTargeting, onClick, a
     );
 };
 
-const EnemyUnit: React.FC<UnitProps> = ({ unit, isActive, isTargeting, onClick, activeEffect }) => {
+interface EnemyUnitProps extends UnitProps {
+    isEntering?: boolean;
+}
+
+const EnemyUnit: React.FC<EnemyUnitProps> = ({ unit, isActive, isTargeting, onClick, activeEffect, isEntering }) => {
     return (
         <div 
             className={`
@@ -229,7 +232,8 @@ const EnemyUnit: React.FC<UnitProps> = ({ unit, isActive, isTargeting, onClick, 
                     mask-blob animate-float
                     ${unit.isDown ? 'rotate-90 translate-y-4 md:translate-y-8' : ''}
                     ${isTargeting ? 'cursor-pointer' : ''}
-                    pointer-events-auto overflow-hidden
+                    ${isEntering ? 'animate-spawn-blob opacity-0' : ''}
+                    pointer-events-auto
                 `}
             >
                 {/* Shadow Effect (Visual noise) */}
@@ -263,6 +267,7 @@ const EnemyUnit: React.FC<UnitProps> = ({ unit, isActive, isTargeting, onClick, 
                     absolute -bottom-2 md:-bottom-4 w-20 md:w-32 transform skew-x-12 border md:border-2 border-black bg-black
                     pointer-events-auto
                     ${isTargeting ? 'cursor-pointer' : ''}
+                    ${isEntering ? 'animate-spawn-blob opacity-0' : ''}
                 `}
             >
                 <div className="h-1.5 md:h-2 bg-red-600" style={{ width: `${(unit.hp / unit.maxHp) * 100}%` }}></div>
@@ -296,7 +301,30 @@ const EnemyUnit: React.FC<UnitProps> = ({ unit, isActive, isTargeting, onClick, 
     );
 };
 
-// --- All Out Attack Cinematic Components ---
+// --- Cinematic Components ---
+
+const BattleStartBanner = () => {
+    return (
+        <div className="absolute inset-0 z-[60] pointer-events-none flex flex-col justify-center items-center gap-4 overflow-hidden">
+            {/* Background Slash */}
+            <div className="absolute inset-0 bg-yellow-400 transform skew-y-3 scale-y-0 animate-scale-in opacity-90 origin-center"></div>
+            
+            <div className="relative z-10 flex flex-col items-center">
+                <div className="w-[140%] h-24 md:h-40 bg-black transform -skew-x-12 flex items-center justify-center animate-slide-in-left shadow-[0_0_30px_rgba(0,0,0,0.5)] border-y-4 md:border-y-8 border-red-600">
+                     <div className="flex items-center gap-4">
+                         <Swords className="w-12 h-12 md:w-24 md:h-24 text-yellow-400" />
+                         <span className="font-display text-6xl md:text-[8rem] text-white italic tracking-tighter">IT'S SHOWTIME!</span>
+                         <AlertTriangle className="w-10 h-10 md:w-20 md:h-20 text-red-600 animate-pulse" />
+                     </div>
+                </div>
+                <div className="absolute top-full mt-4 bg-red-600 text-white font-display text-2xl md:text-4xl px-8 py-1 transform skew-x-12 animate-slide-in-right delay-100 border-2 border-black">
+                    ENEMY ENCOUNTER
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const AllOutCutIn = () => {
     return (
@@ -375,6 +403,7 @@ const AllOutFinish = () => {
 // --- Main App ---
 
 type GameScreen = 'MENU' | 'TEAM' | 'BATTLE';
+type EntranceStage = 'HIDDEN' | 'BANNER' | 'UNITS' | 'DONE';
 
 export default function App() {
     const [screen, setScreen] = useState<GameScreen>('MENU');
@@ -395,6 +424,8 @@ export default function App() {
     const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
     const [menuOpen, setMenuOpen] = useState<'MAIN' | 'SKILL' | 'ITEM' | 'TARGET'>('MAIN');
     const [allOutStage, setAllOutStage] = useState<'NONE' | 'CUT_IN' | 'DUST' | 'FINISH'>('NONE');
+    const [entranceStage, setEntranceStage] = useState<EntranceStage>('HIDDEN');
+
     const [activeEffects, setActiveEffects] = useState<Record<string, string>>({}); 
     const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -428,6 +459,19 @@ export default function App() {
         setActiveEffects({});
         
         setScreen('BATTLE');
+        
+        // Trigger Entrance Sequence
+        setEntranceStage('BANNER');
+        
+        // Sequence Timing
+        setTimeout(() => {
+            setEntranceStage('UNITS'); // Banner gone, animate units in (only enemies animate now)
+        }, 2000); 
+        
+        setTimeout(() => {
+            setEntranceStage('DONE'); // Animations finished, ready to play
+            triggerNavLine('START');
+        }, 3500);
     };
 
     // --- Engine Helpers ---
@@ -486,17 +530,16 @@ export default function App() {
 
     // Initialization
     useEffect(() => {
-        if (screen === 'BATTLE' && battleState.phase === 'START') {
+        if (screen === 'BATTLE' && battleState.phase === 'START' && entranceStage === 'DONE') {
             const order = [...battleState.units].map(u => u.id);
             setBattleState(prev => ({
                 ...prev,
                 turnOrder: order,
                 phase: 'PROCESSING'
             }));
-            triggerNavLine('START');
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [battleState.phase, screen]);
+    }, [battleState.phase, screen, entranceStage]);
 
     // Turn Processor
     useEffect(() => {
@@ -518,7 +561,7 @@ export default function App() {
             setSelectedAction(null);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [battleState.phase, battleState.currentTurnIndex, battleState.oneMore, allOutStage, screen]);
+    }, [battleState.phase, battleState.currentTurnIndex, battleState.oneMore, allOutStage, screen, entranceStage]);
 
     // Check Win/Loss
     useEffect(() => {
@@ -572,31 +615,40 @@ export default function App() {
         setTimeout(() => setAllOutStage('DUST'), 1500);
         setTimeout(() => setAllOutStage('FINISH'), 4000);
         setTimeout(() => {
-            // Apply Damage
-            const newUnits = battleState.units.map(u => {
-                if (u.type === UnitType.ENEMY && u.hp > 0) {
-                     return { ...u, hp: 0 };
-                }
-                return u;
-            });
-            
-            addLog("ALL-OUT ATTACK! It's over!");
-            
-            setBattleState(prev => ({
-                ...prev,
-                units: newUnits,
-                phase: 'PROCESSING' 
-            }));
             setAllOutStage('NONE');
-            
-            setTimeout(() => {
+            setBattleState(prev => {
+                // Recalculate units based on LATEST state
+                const newUnits = prev.units.map(u => {
+                    if (u.type === UnitType.ENEMY && u.hp > 0) {
+                         return { ...u, hp: 0 };
+                    }
+                    return u;
+                });
+                
                 const enemiesAlive = newUnits.some(u => u.type === UnitType.ENEMY && u.hp > 0);
-                if (enemiesAlive) {
-                    nextTurn();
-                }
-                // If dead, Effect handles it via VICTORY_PENDING
-            }, 100);
 
+                if (!enemiesAlive) {
+                    // Victory Line
+                    const lines = NAVIGATOR_LINES['VICTORY'];
+                    const line = lines[Math.floor(Math.random() * lines.length)];
+                    
+                    return {
+                        ...prev,
+                        units: newUnits,
+                        phase: 'VICTORY', // Direct transition
+                        navigatorMessage: line,
+                        log: [...prev.log, "ALL-OUT ATTACK! It's over!"]
+                    };
+                } else {
+                    setTimeout(() => nextTurn(), 100);
+                    return {
+                        ...prev,
+                        units: newUnits,
+                        phase: 'PROCESSING',
+                         log: [...prev.log, "ALL-OUT ATTACK!"]
+                    };
+                }
+            });
         }, 6500);
     };
 
@@ -1052,6 +1104,7 @@ export default function App() {
             {allOutStage === 'CUT_IN' && <AllOutCutIn />}
             {allOutStage === 'DUST' && <AllOutDustCloud />}
             {allOutStage === 'FINISH' && <AllOutFinish />}
+            {entranceStage === 'BANNER' && <BattleStartBanner />}
 
             {/* Background Layers */}
             <div className="absolute inset-0 tv-noise opacity-10 pointer-events-none"></div>
@@ -1103,6 +1156,7 @@ export default function App() {
                             isTargeting={menuOpen === 'TARGET' && !isHealOrSupportAction && !isReviveAction && unit.hp > 0}
                             onClick={() => menuOpen === 'TARGET' && !isHealOrSupportAction && !isReviveAction && unit.hp > 0 && handleTargetSelect(unit.id)}
                             activeEffect={activeEffects[unit.id]}
+                            isEntering={entranceStage === 'UNITS'}
                         />
                     ))}
                 </div>
@@ -1148,6 +1202,7 @@ export default function App() {
                                 flex flex-col gap-1 md:gap-2 transform -skew-x-6 scale-90 md:scale-100
                                 portrait:items-end portrait:origin-top-right
                                 landscape:items-start landscape:origin-bottom-left
+                                animate-slide-up-fade
                             `}>
                                 {showAllOutBtn && (
                                     <button onClick={handleAllOutAttack} className="group relative w-60 md:w-72 bg-red-600 text-white font-display text-3xl md:text-5xl italic py-2 px-4 md:py-4 md:px-8 shadow-[4px_4px_0px_0px_#000] md:shadow-[8px_8px_0px_0px_#000] hover:translate-x-4 transition-all animate-pulse z-50 mb-2 md:mb-4 border-2 md:border-4 border-black hover:bg-white hover:text-red-600">
